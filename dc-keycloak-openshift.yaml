@@ -1,0 +1,102 @@
+kind: DeploymentConfig
+apiVersion: apps.openshift.io/v1
+metadata:
+  name: keycloak
+  namespace: namespace
+  labels:
+    application: keycloak
+spec:
+  strategy:
+    type: Recreate
+    recreateParams:
+      timeoutSeconds: 600
+    resources: {}
+    activeDeadlineSeconds: 21600
+  triggers:
+    - type: ConfigChange
+  replicas: 1
+  revisionHistoryLimit: 10
+  test: false
+  selector:
+    deploymentConfig: keycloak
+  template:
+    metadata:
+      name: keycloak
+      creationTimestamp: null
+      labels:
+        application: keycloak
+        deploymentConfig: keycloak
+      annotations:
+        sidecar.istio.io/inject: 'true'
+        sidecar.istio.io/rewriteAppHTTPProbers: 'true'
+    spec:
+      volumes:
+        - name: empty
+          emptyDir: {}
+      containers:
+        - resources: {}
+          readinessProbe:
+            httpGet:
+              path: /auth
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 30
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 300
+          terminationMessagePath: /dev/termination-log
+          name: keycloak
+          livenessProbe:
+            httpGet:
+              path: /auth
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 60
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 100
+          env:
+            - name: KEYCLOAK_ADMIN
+              value: KEYCLOAK_ADMIN
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              value: KEYCLOAK_ADMIN_PASSWORD
+            - name: KC_PROXY
+              value: edge
+            - name: KC_DB
+              value: oracle
+            - name: KC_DB_PASSWORD
+              value: KC_DB_PASSWORD
+            - name: KC_DB_SCHEMA
+              value: KC_DB_SCHEMA
+            - name: KC_DB_USERNAME
+              value: KC_DB_USERNAME
+            - name: KC_DB_URL
+              value: jdbc:oracle:thin:@//dburl:dbport/dbservice
+            - name: HOSTNAME
+              value: hostname
+            - name: KC_HOSTNAME_PATH
+              value: auth
+            - name: KC_HOSTNAME_STRICT
+              value: 'false'  // Not for prod
+            - name: KC_HTTP_RELATIVE_PATH
+              value: /auth
+          securityContext:
+            privileged: false
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: empty
+              mountPath: /opt/keycloak/data
+          terminationMessagePolicy: File
+          image: 'quay.io/keycloak/keycloak:18.0.1'
+          args:
+            - start-dev  //not for prod
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      schedulerName: default-scheduler
